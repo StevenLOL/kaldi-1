@@ -67,7 +67,6 @@ add_layers_period=2 # by default, add new layers every 2 iterations.
 num_hidden_layers=3
 stage=-4
 
-io_opts="-tc 5" # for jobs with a lot of I/O, limits the number running at one time.   These don't
 splice_width=4 # meaning +- 4 frames on each side for second LDA
 randprune=4.0 # speeds up LDA.
 alpha=4.0 # relates to preconditioning.
@@ -90,6 +89,7 @@ egs_dir=
 lda_opts=
 lda_dim=
 egs_opts=
+io_opts="-tc 5" # for jobs with a lot of I/O, limits the number running at one time.
 transform_dir=     # If supplied, overrides alidir
 cmvn_opts=  # will be passed to get_lda.sh and get_egs.sh, if supplied.  
             # only relevant for "raw" features, not lda.
@@ -202,10 +202,9 @@ lda_dim=$(cat $dir/lda_dim) || exit 1;
 
 if [ $stage -le -3 ] && [ -z "$egs_dir" ]; then
   echo "$0: calling get_egs2.sh"            
-  steps/nnet2/get_egs2.sh $egs_opts "${extra_opts[@]}" \
-      --samples-per-iter $samples_per_iter --stage $get_egs_stage \
-      --cmd "$cmd" $egs_opts --io-opts "$io_opts" \
-      $data $alidir $dir/egs || exit 1;
+  steps/nnet2/get_egs2.sh $egs_opts "${extra_opts[@]}"  --io-opts "$io_opts" \
+    --samples-per-iter $samples_per_iter --stage $get_egs_stage \
+    --cmd "$cmd" $egs_opts $data $alidir $dir/egs || exit 1;
 fi
 
 if [ -z $egs_dir ]; then
@@ -331,7 +330,7 @@ while [ $x -lt $num_iters ]; do
     if [ ! -z "${realign_this_iter[$x]}" ]; then
       epoch=${realign_this_iter[$x]}
 
-      ## HERE
+             
 
       echo "Getting average posterior for purposes of adjusting the priors."
       # Note: this just uses CPUs, using a smallish subset of data.
