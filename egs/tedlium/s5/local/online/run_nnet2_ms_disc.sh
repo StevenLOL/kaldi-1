@@ -68,14 +68,14 @@ if [ $stage -le 1 ]; then
   subsplit=40 # number of jobs that run per job (but 2 run at a time, so total jobs is 80, giving
               # max total slots = 80 * 6 = 480.
   steps/nnet2/make_denlats.sh --cmd "$decode_cmd -l mem_free=1G,ram_free=1G -pe smp $num_threads_denlats" \
-      --online-ivector-dir exp/nnet2_online/ivectors_train_960_hires \
+      --online-ivector-dir exp/nnet2_online/ivectors_train_hires \
       --nj $nj --sub-split $subsplit --num-threads "$num_threads_denlats" --config conf/decode.config \
-     data/train_960_hires data/lang_pp $srcdir ${srcdir}_denlats || exit 1;
+     data/train_hires data/lang $srcdir ${srcdir}_denlats || exit 1;
 
   # the command below is a more generic, but slower, way to do it.
   #steps/online/nnet2/make_denlats.sh --cmd "$decode_cmd -l mem_free=1G,ram_free=1G -pe smp $num_threads_denlats" \
   #    --nj $nj --sub-split $subsplit --num-threads "$num_threads_denlats" --config conf/decode.config \
-  #   data/train_960 data/lang_pp ${srcdir}_online ${srcdir}_denlats || exit 1;
+  #   data/train_hires data/lang ${srcdir}_online ${srcdir}_denlats || exit 1;
 
 fi
 
@@ -88,34 +88,34 @@ if [ $stage -le 2 ]; then
   gpu_opts=
 
   steps/nnet2/align.sh  --cmd "$decode_cmd $gpu_opts" --use-gpu "$use_gpu" \
-     --online-ivector-dir exp/nnet2_online/ivectors_train_960_hires \
-     --nj $nj data/train_960_hires data/lang_pp $srcdir ${srcdir}_ali || exit 1;
+     --online-ivector-dir exp/nnet2_online/ivectors_train_hires \
+     --nj $nj data/train_hires data/lang $srcdir ${srcdir}_ali || exit 1;
 
   # the command below is a more generic, but slower, way to do it.
   # steps/online/nnet2/align.sh --cmd "$decode_cmd $gpu_opts" --use-gpu "$use_gpu" \
-  #    --nj $nj data/train_960 data/lang ${srcdir}_online ${srcdir}_ali || exit 1;
+  #    --nj $nj data/train_hires data/lang ${srcdir}_online ${srcdir}_ali || exit 1;
 fi
 
 
 if [ $stage -le 3 ]; then
   if [[ $(hostname -f) == *.clsp.jhu.edu ]] && [ ! -d ${srcdir}_degs/storage ]; then
     utils/create_split_dir.pl \
-     /export/b0{1,2,5,6}/$USER/kaldi-data/egs/librispeech-$(date +'%m_%d_%H_%M')/s5/${srcdir}_degs/storage ${srcdir}_degs/storage
+     /export/b0{1,2,5,6}/$USER/kaldi-data/egs/tedlium-$(date +'%m_%d_%H_%M')/s5/${srcdir}_degs/storage ${srcdir}_degs/storage
   fi
   # have a higher maximum num-jobs if
   if [ -d ${srcdir}_degs/storage ]; then max_jobs=10; else max_jobs=5; fi
 
   steps/nnet2/get_egs_discriminative2.sh \
     --cmd "$decode_cmd -tc $max_jobs" \
-    --online-ivector-dir exp/nnet2_online/ivectors_train_960_hires \
+    --online-ivector-dir exp/nnet2_online/ivectors_train_hires \
     --criterion $criterion --drop-frames $drop_frames \
-     data/train_960_hires data/lang_pp ${srcdir}{_ali,_denlats,/final.mdl,_degs} || exit 1;
+     data/train_hires data/lang ${srcdir}{_ali,_denlats,/final.mdl,_degs} || exit 1;
 
   # the command below is a more generic, but slower, way to do it.
   #steps/online/nnet2/get_egs_discriminative2.sh \
   #  --cmd "$decode_cmd -tc $max_jobs" \
   #  --criterion $criterion --drop-frames $drop_frames \
-  #   data/train_960 data/lang_pp ${srcdir}{_ali,_denlats,_online,_degs} || exit 1;
+  #   data/train_hires data/lang ${srcdir}{_ali,_denlats,_online,_degs} || exit 1;
 fi
 
 if [ $stage -le 4 ]; then
@@ -133,24 +133,16 @@ if [ $stage -le 5 ]; then
   ln -sf $(readlink -f ${srcdir}_online/conf) $dir/conf # so it acts like an online-decoding directory
 
   for epoch in $(seq $decode_start_epoch $num_epochs); do
-    for test in test_clean test_other dev_clean dev_other; do
+    for decode_set in dev test; do
       (
-        steps/online/nnet2/decode.sh --config conf/decode.config --cmd "$decode_cmd" --nj 50 \
-          --iter epoch$epoch exp/tri6b/graph_pp_tgsmall data/${test} $dir/decode_pp_epoch${epoch}_${test}_tgsmall || exit 1
-        steps/lmrescore.sh --cmd "$decode_cmd" data/lang_pp_test_{tgsmall,tgmed} \
-          data/${test} $dir/decode_pp_epoch${epoch}_${test}_{tgsmall,tgmed}  || exit 1;
-        steps/lmrescore_const_arpa.sh \
-          --cmd "$decode_cmd" data/lang_pp_test_{tgsmall,tglarge} \
-          data/$test $dir/decode_pp_epoch${epoch}_${test}_{tgsmall,tglarge} || exit 1;
-        steps/lmrescore_const_arpa.sh \
-          --cmd "$decode_cmd" data/lang_pp_test_{tgsmall,fglarge} \
-          data/$test $dir/decode_pp_epoch${epoch}_${test}_{tgsmall,fglarge} || exit 1;
-      ) &
+        num_jobs=`cat data/${decode_set}_hires/utt2spk|cut -d' ' -f2|sort -u|wc -l`
+        steps/online/nnet2/decode.sh --config conf/decode.config --cmd "$decode_cmd" --nj $num_jobs \
+          --iter epoch$epoch exp/tri3/graph data/${decode_set}_hires $dir/decode_epoch${epoch}_${decode_set} || exit 1
       ) &
     done
   done
   wait
-  for dir in $dir/decode*; do grep WER $dir/wer_* | utils/best_wer.sh; done
+  for dir in $dir/decode*; do grep Sum $dir/score_*/*.sys | utils/best_wer.sh; done
 fi
 
 if [ $stage -le 6 ] && $cleanup; then

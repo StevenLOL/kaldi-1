@@ -202,7 +202,7 @@ class Component {
   void Propagate(const ChunkInfo &in_info,
                  const ChunkInfo &out_info,
                  const CuMatrixBase<BaseFloat> &in,
-                 CuMatrix<BaseFloat> *out) {
+                 CuMatrix<BaseFloat> *out) const {
     if (out->NumRows() != out_info.NumRows() ||
         out->NumCols() != out_info.NumCols()) {
       out->Resize(out_info.NumRows(), out_info.NumCols());
@@ -713,8 +713,7 @@ class SoftmaxComponent: public NonlinearComponent {
   explicit SoftmaxComponent(int32 dim): NonlinearComponent(dim) { }
   explicit SoftmaxComponent(const SoftmaxComponent &other): NonlinearComponent(other) { }  
   SoftmaxComponent() { }
-  virtual std::string Type() const { return "SoftmaxComponent"; }  // Make it lower case
-  // because each type of Component needs a different first letter.
+  virtual std::string Type() const { return "SoftmaxComponent"; }
   virtual bool BackpropNeedsInput() const { return false; }
   virtual bool BackpropNeedsOutput() const { return true; }
   using Component::Propagate; // to avoid name hiding
